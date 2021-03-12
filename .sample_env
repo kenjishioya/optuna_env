@@ -2,5 +2,5 @@ MYSQL_DB_NAME=optuna
 MYSQL_DB_USER=optuna
 MYSQL_DB_PASS=test1234
 MYSQL_DB_PORT=3306
-main_ip=0.0.0.0
+MAIN_IP=0.0.0.0
 TZ=Asia/Tokyo
