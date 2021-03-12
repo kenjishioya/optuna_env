@@ -1,0 +1,68 @@
+version: "3"
+services:
+  optuna_mysql:
+    platform: linux/x86_64
+    image: mysql:8.0
+    volumes:
+      - ./db/mysql/store:/var/lib/mysql
+      - ./db/mysql/logs:/var/log/mysql
+      - ./db/mysql/config/my.cnf:/etc/mysql/conf.d/my.cnf
+    container_name: optuna_mysql
+    networks:
+      - optuna-net
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DB_NAME}
+      - MYSQL_USER=${MYSQL_DB_USER}
+      - MYSQL_PASSWORD=${MYSQL_DB_PASS}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_DB_PORT}
+      - MAIN_IP=${MAIN_IP}
+      - TZ=${TZ}
+    ports:
+      - ${MYSQL_DB_PORT}:3306
+  # optuna_exec:
+  #   image: optuna_env
+  #   depends_on:
+  #     - optuna_mysql
+  #   container_name: optuna_exec
+  #   networks:
+  #     - optuna-net
+  #   env_file:
+  #     - .env
+  #   working_dir: '/src/'
+  #   volumes:
+  #     - ./src:/src
+  #   tty: true
+  optuna_jupyter:
+    image: optuna_env
+    depends_on:
+      - optuna_mysql
+    container_name: optuna_jupyter
+    networks:
+      - optuna-net
+    env_file:
+      - .env
+    working_dir: '/src/'
+    volumes:
+      - ./src:/src
+    tty: true
+    ports:
+      - 8888:8888
+    command: jupyter notebook --allow-root
+  optuna_dashboard:
+    image: optuna_env
+    depends_on: 
+      - optuna_mysql
+    container_name: optuna_dashboard
+    networks: 
+      - optuna-net
+    env_file:
+      - .env
+    tty: true
+    ports:
+      - 8080:8080
+    restart: on-failure
+    command: optuna-dashboard --host 0.0.0.0 mysql://${MYSQL_DB_USER}:${MYSQL_DB_PASS}@optuna_mysql/${MYSQL_DB_NAME}
+networks:
+  optuna-net:
+    name: optuna-net
+    driver: bridge
