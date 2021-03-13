@@ -23,12 +23,7 @@ from sklearn.metrics import mean_squared_error
 from utils.storage import get_storage
 import optuna
 
-import os
-os.environ.get("MYSQL_DB_USER")
-
-print(os.environ.get("MYSQL_DB_USER"))
-
-X, y = make_regression(n_samples=10**4, n_features=20, n_informative=16, noise=0.0, random_state=1234)
+X, y = make_regression(n_samples=10**4, n_features=20, n_informative=18, noise=0.0, random_state=1234)
 
 X = pd.DataFrame(X)
 y = pd.Series(y)
@@ -47,8 +42,8 @@ def objective(trial):
     max_depth = trial.suggest_int('max_depth', 2, 24)
     # search better n_estimators from 50 to 4000
     n_estimators = trial.suggest_int('n_estimators', 50, 4000)
-    # search better max_depth from 1e-4 to 1
-    learning_rate = trial.suggest_float('learning_rate', 1e-4, 1)
+    # search better max_depth from 1e-4 to 0.4
+    learning_rate = trial.suggest_float('learning_rate', 1e-4, 0.4)
     
     if regressor_name == 'RandomForest':
         model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=1234)
@@ -62,12 +57,12 @@ def objective(trial):
     return error_list.mean()  # An objective value linked with the Trial object.
 
 
-# +
-# study = optuna.create_study(direction='maximize', pruner=optuna.pruners.MedianPruner(), study_name='sample14', storage=get_storage(), load_if_exists=True)  # Create a new study.
-# study.optimize(objective, n_trials=50)  # Invoke optimization of the objective function.
-# -
+study = optuna.create_study(direction='maximize', pruner=optuna.pruners.MedianPruner(), study_name='sample4', storage=get_storage(), load_if_exists=True)  # Create a new study.
+study.optimize(objective, n_trials=50)  # Invoke optimization of the objective function.
 
-study = optuna.load_study(study_name='sample14', storage=get_storage())
+# +
+# study = optuna.load_study(study_name='sample14', storage=get_storage())
+# -
 
 default_model = RandomForestRegressor(random_state=1234)
 default_model.fit(X_train, y_train)

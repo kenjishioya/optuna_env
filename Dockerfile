@@ -8,7 +8,7 @@ RUN apt-get install -y libfreetype6-dev libatlas-base-dev liblapack-dev gfortran
 
 RUN pip install -U pip
 RUN pip install -U setuptools
-RUN pip install numpy<1.20.0
+RUN pip install numpy==1.19.5
 RUN pip install scipy
 RUN pip install sklearn
 RUN pip install pandas
