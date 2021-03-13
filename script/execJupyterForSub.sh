@@ -4,4 +4,4 @@ if [ ! -f .env ]; then
         exit 0
 fi
 
-docker run -it --rm --env-file .env --p 8888:8888 --volume "$PWD"/src:/src --workdir /src optuna_env bash -c "jupyter notebook --allow-root"
+docker run -it --rm --env-file .env -p 8888:8888 --volume "$PWD"/src:/src --workdir /src optuna_env bash -c "jupyter notebook --allow-root"
