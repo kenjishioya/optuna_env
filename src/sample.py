@@ -57,7 +57,7 @@ def objective(trial):
     return error_list.mean()  # An objective value linked with the Trial object.
 
 
-study = optuna.create_study(direction='maximize', pruner=optuna.pruners.MedianPruner(), study_name='sample4', storage=get_storage(), load_if_exists=True)  # Create a new study.
+study = optuna.create_study(direction='maximize', pruner=optuna.pruners.MedianPruner(), study_name='sample', storage=get_storage(), load_if_exists=True)  # Create a new study.
 study.optimize(objective, n_trials=50)  # Invoke optimization of the objective function.
 
 # +
