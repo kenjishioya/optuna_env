@@ -26,11 +26,31 @@ import optuna
 
 application_train_df = pd.read_csv('./data/application_train.csv')
 
+application_test_df = pd.read_csv('./data/application_test.csv')
+
+bureau_df = pd.read_csv('./data/bureau.csv')
+
+bureau_balance_df = pd.read_csv('./data/bureau_balance.csv')
+
 print(application_train_df.info())
 print(application_train_df.describe())
 
+bureau_balance_pivot_mean_df = bureau_balance_df.pivot_table(index='SK_ID_BUREAU', values='MONTHS_BALANCE', aggfunc=np.mean, fill_value=0)
+bureau_balance_pivot_len_df = bureau_balance_df.drop('MONTHS_BALANCE', axis='columns').pivot_table(index='SK_ID_BUREAU', columns='STATUS', aggfunc=len, fill_value=0)
+bureau_balance_pivot_df = pd.concat([bureau_balance_pivot_mean_df, bureau_balance_pivot_len_df], axis='columns')
+
+bureau_mered_df = bureau_df.merge(bureau_balance_pivot_df, how='left', on='SK_ID_BUREAU')
+bureau_pivot_mean_df_columns = ['SK_ID_CURR','DAYS_CREDIT','CREDIT_DAY_OVERDUE','DAYS_CREDIT_ENDDATE','DAYS_ENDDATE_FACT','AMT_CREDIT_MAX_OVERDUE','CNT_CREDIT_PROLONG','AMT_CREDIT_SUM','AMT_CREDIT_SUM_DEBT','AMT_CREDIT_SUM_LIMIT','AMT_CREDIT_SUM_OVERDUE','DAYS_CREDIT_UPDATE','AMT_ANNUITY']
+bureau_pivot_mean_df_columns = bureau_pivot_mean_df_columns + bureau_balance_pivot_df.columns.tolist()
+bureau_pivot_mean_df = bureau_mered_df[bureau_pivot_mean_df_columns].pivot_table(index='SK_ID_CURR', aggfunc=np.mean, fill_value=0)
+bureau_pivot_CREDIT_ACTIVE_df = bureau_mered_df[['SK_ID_CURR','CREDIT_ACTIVE']].pivot_table(index='SK_ID_CURR', columns='CREDIT_ACTIVE', aggfunc=len, fill_value=0)
+bureau_pivot_CREDIT_TYPE_df = bureau_mered_df[['SK_ID_CURR','CREDIT_TYPE']].pivot_table(index='SK_ID_CURR', columns='CREDIT_TYPE', aggfunc=len, fill_value=0)
+bureau_pivot_df = pd.concat([bureau_pivot_mean_df, bureau_pivot_CREDIT_ACTIVE_df, bureau_pivot_CREDIT_TYPE_df], axis='columns')
+bureau_pivot_df
+
 y = application_train_df['TARGET']
-train_df = application_train_df.drop(['SK_ID_CURR','TARGET'], axis='columns')
+train_df = application_train_df.merge(bureau_pivot_df, how='left', on='SK_ID_CURR')
+train_df = train_df.drop(['SK_ID_CURR','TARGET'], axis='columns')
 
 
 def process_train_df(i_df):
@@ -57,6 +77,19 @@ def process_train_df(i_df):
 
 X = process_train_df(train_df)
 
+test_model = XGBClassifier(random_state=1234)
+test_model.fit(X, y)
+feature_importance = pd.DataFrame(test_model.feature_importances_, columns=["importance"], index=X.columns)
+# feature_importance.sort_values("importance", ascending=False).plot(kind="bar", figsize=(100, 70))
+
+# feature selection
+important_feature = feature_importance.sort_values("importance", ascending=False)[0:190]
+print(len(important_feature))
+print(important_feature)
+
+X = X[important_feature.index.tolist()]
+#print(type(important_feature.index.tolist()))
+
 # train test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=1234)
 
@@ -80,7 +113,7 @@ def objective(trial):
 
     return error_list.mean()  # An objective value linked with the Trial object.
 
-study = optuna.create_study(direction='maximize', study_name='home_credit_default_risk2', storage=get_storage(), load_if_exists=True)  # Create a new study.
+study = optuna.create_study(direction='maximize', study_name='home_credit_default_risk', storage=get_storage(), load_if_exists=True)  # Create a new study.
 study.optimize(objective, n_trials=50)  # Invoke optimization of the objective function.
 
-study.best_trial
+

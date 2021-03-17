@@ -2,7 +2,8 @@ db/mysql/logs/*
 !db/mysql/logs/.gitkeep 
 db/mysql/store/*
 !db/mysql/store/.gitkeep
-
+src/data/*
+!src/data/.gitkeep
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
