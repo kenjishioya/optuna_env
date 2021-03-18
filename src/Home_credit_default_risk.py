@@ -77,7 +77,7 @@ def process_train_df(i_df):
 
 X = process_train_df(train_df)
 
-test_model = XGBClassifier(random_state=1234)
+test_model = XGBClassifier(objective='binary:logistic', eval_metric='auc', random_state=1234)
 test_model.fit(X, y)
 feature_importance = pd.DataFrame(test_model.feature_importances_, columns=["importance"], index=X.columns)
 # feature_importance.sort_values("importance", ascending=False).plot(kind="bar", figsize=(100, 70))
