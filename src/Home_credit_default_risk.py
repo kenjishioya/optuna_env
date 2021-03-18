@@ -105,7 +105,7 @@ def objective(trial):
     if regressor_name == 'RandomForest':
         model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=1234)
     else:
-        model = XGBClassifier(n_estimators=n_estimators, max_depth=max_depth, objective='binary:logistic', random_state=1234)
+        model = XGBClassifier(n_estimators=n_estimators, max_depth=max_depth, objective='binary:logistic', eval_metric='auc', random_state=1234)
 
     
     
