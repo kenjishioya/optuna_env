@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.10.3
+#       jupytext_version: 1.11.0
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -77,18 +77,22 @@ def process_train_df(i_df):
 
 X = process_train_df(train_df)
 
-test_model = XGBClassifier(objective='binary:logistic', eval_metric='auc', random_state=1234)
-test_model.fit(X, y)
-feature_importance = pd.DataFrame(test_model.feature_importances_, columns=["importance"], index=X.columns)
+# +
+# test_model = XGBClassifier(objective='binary:logistic', eval_metric='auc', random_state=1234)
+# test_model.fit(X, y)
+# feature_importance = pd.DataFrame(test_model.feature_importances_, columns=["importance"], index=X.columns)
 # feature_importance.sort_values("importance", ascending=False).plot(kind="bar", figsize=(100, 70))
 
+# +
 # feature selection
-important_feature = feature_importance.sort_values("importance", ascending=False)[0:190]
-print(len(important_feature))
-print(important_feature)
+# important_feature = feature_importance.sort_values("importance", ascending=False)[0:190]
+# print(len(important_feature))
+# print(important_feature)
 
-X = X[important_feature.index.tolist()]
+# +
+# X = X[important_feature.index.tolist()]
 #print(type(important_feature.index.tolist()))
+# -
 
 # train test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=1234)
@@ -113,7 +117,7 @@ def objective(trial):
 
     return error_list.mean()  # An objective value linked with the Trial object.
 
-study = optuna.create_study(direction='maximize', study_name='home_credit_default_risk', storage=get_storage(), load_if_exists=True)  # Create a new study.
+study = optuna.create_study(direction='maximize', study_name='home_credit_default_risk2', storage=get_storage(), load_if_exists=True)  # Create a new study.
 study.optimize(objective, n_trials=50)  # Invoke optimization of the objective function.
 
 
