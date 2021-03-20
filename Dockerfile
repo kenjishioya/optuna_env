@@ -5,6 +5,7 @@ RUN apt-get update
 RUN apt-get install -y sudo
 RUN apt-get install -y wget
 RUN apt-get install -y libfreetype6-dev libatlas-base-dev liblapack-dev gfortran
+RUN apt-get install -y cmake
 
 RUN pip install -U pip
 RUN pip install -U setuptools
@@ -17,6 +18,7 @@ RUN pip install matplotlib
 RUN pip install jupyter
 RUN pip install jupytext
 RUN pip install xgboost
+RUN pip install lightgbm
 RUN pip install optuna
 RUN pip install optuna-dashboard
 
