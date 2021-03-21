@@ -55,6 +55,12 @@ class Home_Credit:
         num_cols = [col for col in df.columns if df[col].dtype != 'object']
         df.loc[:, num_cols] = df[num_cols].fillna(value=0)
         return df
+    
+    def convert_float64_to_float32(self, df):
+        num_cols = [col for col in df.columns if df[col].dtype == 'float64']
+        print()
+        df.loc[:, num_cols] = df[num_cols].astype('float32')
+        return df
 
     def preprocess_aplication(self):
         train_df = pd.read_csv(self.APPLICATION_TRAIN_PATH, nrows=self.nrows)
@@ -135,7 +141,7 @@ class Home_Credit:
         # search better max_depth from 2 to 16
         max_depth = trial.suggest_int('max_depth', 2, 16)
         # search better n_estimators from 50 to 4000
-        n_estimators = trial.suggest_int('n_estimators', 50, 10000)
+        n_estimators = trial.suggest_int('n_estimators', 50, 7000)
         if classifier_name == 'RandomForest':
             model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=1234)
         elif classifier_name == 'XGBoost':
@@ -144,7 +150,7 @@ class Home_Credit:
             model = LGBMClassifier(boosting_type='goss',n_estimators=n_estimators, max_depth=max_depth, objective='binary', num_leaves=34, random_state=1234)
         
         error_list = cross_val_score(model, self.X, self.y, cv=3, scoring='roc_auc')
-
+        gc.collect()
         return error_list.mean()
 
     def parameter_tuning(self):
@@ -169,14 +175,16 @@ class Home_Credit:
         train_df = all_df[all_df['TARGET'].notnull()]
         test_df = all_df[all_df['TARGET'].isnull()]
         filled_train_df = self.fill_zero_num_cols(train_df)
-        self.y = filled_train_df['TARGET']
-        features = [feature for feature in filled_train_df.columns if feature not in ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV']]
-        self.X = filled_train_df[features]
+        converted_train_df = self.convert_float64_to_float32(filled_train_df)
+        self.y = converted_train_df['TARGET']
+        features = [feature for feature in converted_train_df.columns if feature not in ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV']]
+        self.X = converted_train_df[features]
         print(f'shape pf X: {self.X.shape}')
-        self.clear_memory([all_df, train_df, test_df, filled_train_df, bureau_df, prev_application_df, pos_cash_df, installments_df, credit_card_df])
+        print(f'missing values: {self.X.columns[self.X.isna().sum() > 0]}')
+        self.clear_memory([all_df, train_df, test_df, filled_train_df, converted_train_df, bureau_df, prev_application_df, pos_cash_df, installments_df, credit_card_df])
         # print(self.X)
         study = optuna.create_study(direction='maximize', study_name='Home_Credit', storage=get_storage(), load_if_exists=True)  # Create a new study.
-        study.optimize(self.objective, n_trials=50)
+        study.optimize(self.objective, n_trials=10)
 
 
 home_credit = Home_Credit()
