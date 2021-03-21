@@ -58,7 +58,6 @@ class Home_Credit:
     
     def convert_float64_to_float32(self, df):
         num_cols = [col for col in df.columns if df[col].dtype == 'float64']
-        print()
         df.loc[:, num_cols] = df[num_cols].astype('float32')
         return df
 
@@ -135,7 +134,7 @@ class Home_Credit:
         self.clear_memory([credit_card_df, encoded_credit_card_df])
         return credit_card_agg_df
 
-    def objective(self, trial):
+    def objective_multi_classifiers(self, trial):
         # search better model from RandomForestRegressor, XGBRegressor
         classifier_name = trial.suggest_categorical('classifier', ['RandomForest', 'XGBoost', 'LGBM'])
         # search better max_depth from 2 to 16
@@ -152,8 +151,40 @@ class Home_Credit:
         error_list = cross_val_score(model, self.X, self.y, cv=3, scoring='roc_auc')
         gc.collect()
         return error_list.mean()
+    
+    def objective_LGBM(self, trial):
+        # hyper parameters for tuning
+        n_estimators = trial.suggest_int('n_estimators', 50, 10000)
+        learning_rate = trial.suggest_float('learning_rate', 0.001, 0.5)
+        max_depth = trial.suggest_int('max_depth', 2, 16)
+        num_leaves = trial.suggest_int('num_leaves', 10, 50)
+        colsample_bytree = trial.suggest_float('colsample_bytree', 0.01, 1)
+        subsample = trial.suggest_float('subsample', 0.01, 1)
+        reg_alpha = trial.suggest_float('reg_alpha', 0.001, 0.1)
+        reg_lambda = trial.suggest_float('reg_lambda', 0.001, 0.1)
+        min_split_gain = trial.suggest_float('min_split_gain', 0.001, 0.1)
+        min_child_weight = trial.suggest_float('min_child_weight', 0.001, 50)
+        
+        model = LGBMClassifier(
+            boosting_type='goss',
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            max_depth=max_depth,
+            num_leaves=num_leaves,
+            colsample_bytree=colsample_bytree,
+            subsample=subsample,
+            reg_alpha=reg_alpha,
+            reg_lambda=reg_lambda,
+            min_split_gain=min_split_gain,
+            min_child_weight=min_child_weight,
+            objective='binary',
+            random_state=1234)
+        
+        error_list = cross_val_score(model, self.X, self.y, cv=3, scoring='roc_auc')
+        gc.collect()
+        return error_list.mean()
 
-    def parameter_tuning(self):
+    def preprocess_data(self):
         # application
         all_df = self.preprocess_aplication()
         # bureau
@@ -180,12 +211,20 @@ class Home_Credit:
         features = [feature for feature in converted_train_df.columns if feature not in ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV']]
         self.X = converted_train_df[features]
         print(f'shape pf X: {self.X.shape}')
-        print(f'missing values: {self.X.columns[self.X.isna().sum() > 0]}')
         self.clear_memory([all_df, train_df, test_df, filled_train_df, converted_train_df, bureau_df, prev_application_df, pos_cash_df, installments_df, credit_card_df])
-        # print(self.X)
-        study = optuna.create_study(direction='maximize', study_name='Home_Credit', storage=get_storage(), load_if_exists=True)  # Create a new study.
-        study.optimize(self.objective, n_trials=10)
+
+    def get_objective(self, objective_name):
+        objective_dict = {
+            "multi_classifiers": self.objective_multi_classifiers,
+            "LGBM": self.objective_LGBM
+        }
+        return objective_dict[objective_name]
+        
+    def parameter_tuning(self, study_name ,objective_name):
+        study = optuna.create_study(direction='maximize', study_name=study_name, storage=get_storage(), load_if_exists=True)  # Create a new study.
+        study.optimize(self.get_objective(objective_name), n_trials=10)
 
 
 home_credit = Home_Credit()
-home_credit.parameter_tuning()
+home_credit.preprocess_data()
+home_credit.parameter_tuning('LGBM_00', 'LGBM')
