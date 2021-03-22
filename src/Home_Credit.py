@@ -222,7 +222,7 @@ class Home_Credit:
         
     def parameter_tuning(self, study_name ,objective_name):
         study = optuna.create_study(direction='maximize', study_name=study_name, storage=get_storage(), load_if_exists=True)  # Create a new study.
-        study.optimize(self.get_objective(objective_name), n_trials=10)
+        study.optimize(self.get_objective(objective_name), n_trials=60)
 
 
 home_credit = Home_Credit()
