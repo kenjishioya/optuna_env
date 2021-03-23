@@ -38,10 +38,12 @@ class Home_Credit:
     def __init__(self, debug=False):
         self.debug = debug
         self.nrows = 10000 if debug == True else None
+        self.var_list_to_clear = []
     
-    def clear_memory(self, var_list):
-        for variable in var_list:
+    def clear_memory(self):
+        for variable in self.var_list_to_clear:
             del variable
+        self.var_list_to_clear = []
         gc.collect()
     
     def one_hot_encoding(self, df):
@@ -60,41 +62,68 @@ class Home_Credit:
         num_cols = [col for col in df.columns if df[col].dtype == 'float64']
         df.loc[:, num_cols] = df[num_cols].astype('float32')
         return df
+    
+    def get_num_columns_list(self, df, add_list=[]):
+        num_cols = [col for col in df.columns if df[col].dtype != 'object']
+        for elem in add_list:
+            num_cols.append(elem)
+        return num_cols
 
     def preprocess_aplication(self):
         train_df = pd.read_csv(self.APPLICATION_TRAIN_PATH, nrows=self.nrows)
         test_df = pd.read_csv(self.APPLICATION_TEST_PATH, nrows=self.nrows)
         all_df = train_df.append(test_df)
+        self.var_list_to_clear.extend([train_df, test_df])
         all_df = all_df[all_df['CODE_GENDER'] != 'XNA']
         for bin_feature in ['CODE_GENDER', 'FLAG_OWN_CAR', 'FLAG_OWN_REALTY']:
             all_df[bin_feature], uniques = pd.factorize(all_df[bin_feature])
 
         encoded_df = self.one_hot_encoding(all_df)
+        self.var_list_to_clear.extend([all_df])
         encoded_df['DAYS_EMPLOYED'].replace(365243, np.nan, inplace= True)
         encoded_df['DAYS_EMPLOYED_PERC'] = encoded_df['DAYS_EMPLOYED'] / encoded_df['DAYS_BIRTH']
         encoded_df['INCOME_CREDIT_PERC'] = encoded_df['AMT_INCOME_TOTAL'] / encoded_df['AMT_CREDIT']
         encoded_df['INCOME_PER_PERSON'] = encoded_df['AMT_INCOME_TOTAL'] / encoded_df['CNT_FAM_MEMBERS']
         encoded_df['ANNUITY_INCOME_PERC'] = encoded_df['AMT_ANNUITY'] / encoded_df['AMT_INCOME_TOTAL']
         encoded_df['PAYMENT_RATE'] = encoded_df['AMT_ANNUITY'] / encoded_df['AMT_CREDIT']
-        self.clear_memory([train_df, test_df, all_df])
+        self.clear_memory()
         return encoded_df
     
     def preprocess_breau(self):
         bureau_df = pd.read_csv(self.BUREAU_PATH, nrows=self.nrows)
         bureau_balance_df = pd.read_csv(self.BUREAU_BALANCE_PATH, nrows=self.nrows)
+        bureau_num_columns_list = self.get_num_columns_list(bureau_df)
         encoded_bureau_df = self.one_hot_encoding(bureau_df)
         encoded_bb_df = self.one_hot_encoding(bureau_balance_df)
+        self.var_list_to_clear.extend([bureau_df, bureau_balance_df])
         # bureau_balance aggregate
         bureau_balance_agg_df = encoded_bb_df.groupby('SK_ID_BUREAU').agg('mean')
         bureau_merged_df = encoded_bureau_df.merge(bureau_balance_agg_df, how='left', on='SK_ID_BUREAU')
         bureau_merged_df = bureau_merged_df.drop('SK_ID_BUREAU', axis='columns')
         bureau_agg_df = bureau_merged_df.groupby('SK_ID_CURR').agg('mean')
-        self.clear_memory([bureau_df, bureau_balance_df, encoded_bureau_df, encoded_bb_df, bureau_balance_agg_df, bureau_merged_df])
+        self.var_list_to_clear.extend([bureau_balance_agg_df, bureau_merged_df])
+        # active
+        active = encoded_bureau_df[encoded_bureau_df['CREDIT_ACTIVE_Active'] == 1]
+        active_agg = active[bureau_num_columns_list].groupby('SK_ID_CURR').agg('mean')
+        active_agg = active_agg.drop('SK_ID_BUREAU', axis='columns')
+        active_agg.columns = pd.Index(['ACTIVE_' + col for col in active_agg.columns.tolist()])
+        bureau_agg_df = pd.merge(bureau_agg_df, active_agg, how='left', on='SK_ID_CURR')
+        self.var_list_to_clear.extend([active, active_agg])
+        # closed
+        closed = encoded_bureau_df[encoded_bureau_df['CREDIT_ACTIVE_Closed'] == 1]
+        closed_agg = closed[bureau_num_columns_list].groupby('SK_ID_CURR').agg('mean')
+        closed_agg = closed_agg.drop('SK_ID_BUREAU', axis='columns')
+        closed_agg.columns = pd.Index(['CLOSED_' + col for col in closed_agg.columns.tolist()])
+        bureau_merged_df = pd.merge(bureau_merged_df, closed_agg, how='left', on='SK_ID_CURR')
+        self.var_list_to_clear.extend([closed, closed_agg])
+        self.clear_memory()
         return bureau_agg_df
 
     def preprocess_prev_application(self):
         prev_df = pd.read_csv(self.PREVIOUS_APPLICATION_PATH, nrows=self.nrows)
+        prev_num_columns_list = self.get_num_columns_list(prev_df)
         encoded_prev_df = self.one_hot_encoding(prev_df)
+        self.var_list_to_clear.extend([prev_df])
         encoded_prev_df['DAYS_FIRST_DRAWING'].replace(365243, np.nan, inplace= True)
         encoded_prev_df['DAYS_FIRST_DUE'].replace(365243, np.nan, inplace= True)
         encoded_prev_df['DAYS_LAST_DUE_1ST_VERSION'].replace(365243, np.nan, inplace= True)
@@ -103,35 +132,57 @@ class Home_Credit:
         # Add feature: value ask / value received percentage
         encoded_prev_df['APP_CREDIT_PERC'] = encoded_prev_df['AMT_APPLICATION'] / encoded_prev_df['AMT_CREDIT']
         prev_agg_df = encoded_prev_df.groupby('SK_ID_CURR').agg('mean')
+        self.var_list_to_clear.extend([encoded_prev_df])
         prev_agg_df = prev_agg_df.drop('SK_ID_PREV', axis='columns')
-        self.clear_memory([prev_df, encoded_prev_df])
+        # approved
+        approved = encoded_prev_df[encoded_prev_df['NAME_CONTRACT_STATUS_Approved'] == 1]
+        approved_agg = approved[prev_num_columns_list].groupby('SK_ID_CURR').agg('mean')
+        approved_agg = approved_agg.drop('SK_ID_PREV', axis='columns')
+        approved_agg.columns = pd.Index(['APPROVED_' + col for col in approved_agg.columns.tolist()])
+        prev_agg_df = pd.merge(prev_agg_df, approved_agg, how='left', on='SK_ID_CURR')
+        self.var_list_to_clear.extend([approved, approved_agg])
+        # refused
+        refused = encoded_prev_df[encoded_prev_df['NAME_CONTRACT_STATUS_Refused'] == 1]
+        refused_agg = refused[prev_num_columns_list].groupby('SK_ID_CURR').agg('mean')
+        refused_agg = refused_agg.drop('SK_ID_PREV', axis='columns')
+        refused_agg.columns = pd.Index(['REFUSED_' + col for col in refused_agg.columns.tolist()])
+        encoded_prev_df = pd.merge(encoded_prev_df, refused_agg, how='left', on='SK_ID_CURR')
+        self.var_list_to_clear.extend([refused, refused_agg])
+        
+        self.clear_memory()
         return prev_agg_df
 
     def preprocess_pos_cash(self):
         pos_df = pd.read_csv(self.POS_CASH_BALANCE_PATH, nrows=self.nrows)
         encoded_pos_df = self.one_hot_encoding(pos_df)
+        self.var_list_to_clear.extend([pos_df])
         pos_agg_df = encoded_pos_df.groupby('SK_ID_CURR').agg('mean')
         pos_agg_df['POS_COUNT'] = encoded_pos_df.groupby('SK_ID_CURR').size()
         pos_agg_df = pos_agg_df.drop('SK_ID_PREV', axis='columns')
-        self.clear_memory([pos_df, encoded_pos_df])
+        self.var_list_to_clear.extend([encoded_pos_df])
+        self.clear_memory()
         return pos_agg_df
 
     def preprocess_installments_df(self):
         install_df = pd.read_csv(self.INSTALLMENTS_PAYMENTS_PATH, nrows=self.nrows)
         encoded_install_df = self.one_hot_encoding(install_df)
+        self.var_list_to_clear.extend([install_df])
         install_agg_df = encoded_install_df.groupby('SK_ID_CURR').agg('mean')
         install_agg_df['INSTALL_COUNT'] = encoded_install_df.groupby('SK_ID_CURR').size()
         install_agg_df = install_agg_df.drop('SK_ID_PREV', axis='columns')
-        self.clear_memory([install_df, encoded_install_df])
+        self.var_list_to_clear.extend([encoded_install_df])
+        self.clear_memory()
         return install_agg_df
 
     def preprocess_credit_card_df(self):
         credit_card_df = pd.read_csv(self.CREDIT_CARD_PATH, nrows=self.nrows)
         encoded_credit_card_df = self.one_hot_encoding(credit_card_df)
+        self.var_list_to_clear.extend([credit_card_df])
         credit_card_agg_df = encoded_credit_card_df.groupby('SK_ID_CURR').agg('mean')
         credit_card_agg_df['CREDIT_COUNT'] = encoded_credit_card_df.groupby('SK_ID_CURR').size()
         credit_card_agg_df = credit_card_agg_df.drop('SK_ID_PREV', axis='columns')
-        self.clear_memory([credit_card_df, encoded_credit_card_df])
+        self.var_list_to_clear.extend([encoded_credit_card_df])
+        self.clear_memory()
         return credit_card_agg_df
 
     def objective_multi_classifiers(self, trial):
@@ -190,28 +241,40 @@ class Home_Credit:
         # bureau
         bureau_df = self.preprocess_breau()
         all_df = pd.merge(all_df, bureau_df, how='left', on='SK_ID_CURR')
+        self.var_list_to_clear.extend([bureau_df])
         # previous application
         prev_application_df = self.preprocess_prev_application()
         all_df = pd.merge(all_df, prev_application_df, how='left', on='SK_ID_CURR')
+        self.var_list_to_clear.extend([prev_application_df])
         # POS CASH
         pos_cash_df = self.preprocess_credit_card_df()
         all_df = pd.merge(all_df, pos_cash_df, how='left', on='SK_ID_CURR')
+        self.var_list_to_clear.extend([pos_cash_df])
         # installments
         installments_df = self.preprocess_installments_df()
         all_df = pd.merge(all_df, installments_df, how='left', on='SK_ID_CURR')
+        self.var_list_to_clear.extend([installments_df])
         # credit card
         credit_card_df = self.preprocess_credit_card_df()
         all_df = pd.merge(all_df, credit_card_df, how='left', on='SK_ID_CURR')
+        self.var_list_to_clear.extend([credit_card_df])
+        
         all_df = all_df.rename(columns = lambda x:re.sub('[^A-Za-z0-9_]+', '', x))
         train_df = all_df[all_df['TARGET'].notnull()]
         test_df = all_df[all_df['TARGET'].isnull()]
+        self.var_list_to_clear.extend([all_df])
+        
         filled_train_df = self.fill_zero_num_cols(train_df)
+        self.var_list_to_clear.extend([train_df])
+        
         converted_train_df = self.convert_float64_to_float32(filled_train_df)
+        self.var_list_to_clear.extend([filled_train_df])
+        
         self.y = converted_train_df['TARGET']
         features = [feature for feature in converted_train_df.columns if feature not in ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV']]
         self.X = converted_train_df[features]
         print(f'shape pf X: {self.X.shape}')
-        self.clear_memory([all_df, train_df, test_df, filled_train_df, converted_train_df, bureau_df, prev_application_df, pos_cash_df, installments_df, credit_card_df])
+        self.clear_memory()
 
     def get_objective(self, objective_name):
         objective_dict = {
@@ -223,8 +286,12 @@ class Home_Credit:
     def parameter_tuning(self, study_name ,objective_name):
         study = optuna.create_study(direction='maximize', study_name=study_name, storage=get_storage(), load_if_exists=True)  # Create a new study.
         study.optimize(self.get_objective(objective_name), n_trials=60)
+    
+    def parameter_tuning_test(self, objective_name):
+        study = optuna.create_study(direction='maximize')  # Create a new study.
+        study.optimize(self.get_objective(objective_name), n_trials=4)
 
 
 home_credit = Home_Credit()
 home_credit.preprocess_data()
-home_credit.parameter_tuning('LGBM_00', 'LGBM')
+home_credit.parameter_tuning('LGBM_01','LGBM')
